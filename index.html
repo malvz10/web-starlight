@@ -28,11 +28,11 @@
 /* start the heavy downloads right away (the 3D code picks these up instead of asking again) */
 (function(){ try {
   // iPadOS can identify as a Mac when requesting the desktop site.
-  var appleTouch = /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+  var ipad = /iPad/i.test(navigator.userAgent) ||
     (/Mac/i.test(navigator.platform) && navigator.maxTouchPoints > 1);
-  var touch3D = appleTouch || matchMedia('(pointer:coarse)').matches;
+  var touch3D = ipad || /iPhone|iPod/i.test(navigator.userAgent) || matchMedia('(pointer:coarse)').matches;
   var lite = touch3D || innerWidth < 700;
-  window.__STARLIGHT_3D_PROFILE = { touch:touch3D, lite:lite };
+  window.__STARLIGHT_3D_PROFILE = { touch:touch3D, lite:lite, ipad:ipad };
   document.documentElement.classList.toggle('touch-3d', touch3D);
   var car = lite ? 'assets/models/car3m.gz.png?v=3' : 'assets/models/car3.gz.png?v=1';
   var go = function (u) { var p = fetch(u); p.catch(function () {}); return p; };
@@ -496,7 +496,7 @@
 <noscript><div class="nojs">Esta página usa JavaScript para mostrar el auto en 3D. Escríbenos al <a href="https://wa.me/523335561612">WhatsApp 33 3556 1612</a>.</div></noscript>
 
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
-<script type="module" src="js/engine.js?v=57f58ba3c478" onerror="window.__ENGINE_FAIL=1"></script>
+<script type="module" src="js/engine.js?v=575e8957f48b" onerror="window.__ENGINE_FAIL=1"></script>
 <script src="js/app.js?v=33602725c02e" defer></script>
 </body>
 </html>

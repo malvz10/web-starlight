@@ -30,6 +30,7 @@ const SHEET_MQ = matchMedia('(max-width:560px), (orientation:portrait) and (max-
 const sheet = () => SHEET_MQ.matches;
 const PROFILE = window.__STARLIGHT_3D_PROFILE;
 const TOUCH_GPU = PROFILE?.touch === true;
+const SOFT_LOOK = PROFILE?.ipad === true;
 const LITE = () => PROFILE?.lite ?? small();
 
 let renderer;
@@ -84,7 +85,17 @@ void main(){ vec2 r = (vUv - uC) * vec2(uAsp, 1.0); vec2 dir = uDir * (1.0 - smo
   composer.addPass(new OutputPass());
   GRADE.pass = new ShaderPass({ uniforms:{ tDiffuse:{ value:null }, uSat:GRADE.sat, uCon:GRADE.con },
     vertexShader:'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader:'uniform sampler2D tDiffuse; uniform float uSat; uniform float uCon; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)); c.rgb = mix(vec3(l), c.rgb, uSat); c.rgb = (c.rgb - 0.5) * uCon + 0.5; gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a); }' });
+    fragmentShader:`uniform sampler2D tDiffuse; uniform float uSat; uniform float uCon; varying vec2 vUv;
+void main(){
+  vec4 c = texture2D(tDiffuse, vUv);
+  ${SOFT_LOOK ? `// Blend subpixel samples in the existing output pass to soften hard edges.
+  vec2 offset = vec2(0.5) / vec2(textureSize(tDiffuse, 0));
+  c.rgb = c.rgb * 0.6 + (texture2D(tDiffuse, vUv - offset).rgb + texture2D(tDiffuse, vUv + offset).rgb) * 0.2;` : ''}
+  float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+  c.rgb = mix(vec3(l), c.rgb, uSat);
+  c.rgb = (c.rgb - 0.5) * uCon + 0.5;
+  gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a);
+}` });
   composer.addPass(GRADE.pass);   // saturation / contrast on the final picture
   composer.setPixelRatio(DPR()); composer.setSize(innerWidth, innerHeight);
   return composer;
@@ -1354,27 +1365,32 @@ let SHOW_DISC = false, DISC_R = 2.6;   // turntable (red ring + platform) drawn 
 const DISC = { uDiscC:{ value:new THREE.Vector2(0, 0) }, uDiscR:{ value:-10 }, uTile:{ value:0.35 }, uCarH:{ value:new THREE.Vector2(0, 0) }, uWheel:{ value:[0, 1, 2, 3].map(() => new THREE.Vector2(99, 99)) }, uOut:{ value:0.25 }, uPool:{ value:new THREE.Vector2(3.0, 6.5) } };
 function floorMaterial(){
   const tl = new THREE.TextureLoader();
-  const mask = tl.load('assets/textures/losetas_colores.png'); mask.flipY = false; mask.colorSpace = THREE.SRGBColorSpace; mask.magFilter = mask.minFilter = THREE.NearestFilter; mask.generateMipmaps = false;
-  const pat = tl.load('assets/textures/losetas_patron.png'); pat.flipY = false; pat.wrapS = pat.wrapT = THREE.RepeatWrapping; pat.colorSpace = THREE.NoColorSpace; pat.anisotropy = 8;
-  const bump = tl.load('assets/textures/losetas_patron.png'); bump.flipY = false; bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.colorSpace = THREE.NoColorSpace; bump.repeat.set(22.5, 27 * FLOOR_K); bump.anisotropy = 8;
-  const m = new THREE.MeshStandardMaterial({ map:mask, bumpMap:bump, bumpScale:1.2, roughness:0.42, metalness:0, envMapIntensity:1.0 });
+  const mask = tl.load('assets/textures/losetas_colores.png', invalidate); mask.flipY = false; mask.colorSpace = THREE.SRGBColorSpace; mask.magFilter = mask.minFilter = THREE.NearestFilter; mask.generateMipmaps = false;
+  const pat = tl.load('assets/textures/losetas_patron.png', invalidate); pat.flipY = false; pat.wrapS = pat.wrapT = THREE.RepeatWrapping; pat.colorSpace = THREE.NoColorSpace; pat.anisotropy = SOFT_LOOK ? 2 : 8;
+  const m = new THREE.MeshStandardMaterial({ map:mask, roughness:SOFT_LOOK ? 0.62 : 0.42, metalness:0, envMapIntensity:SOFT_LOOK ? 0.75 : 1.0 });
+  if (!SOFT_LOOK) {
+    const bump = tl.load('assets/textures/losetas_patron.png', invalidate);
+    bump.flipY = false; bump.wrapS = bump.wrapT = THREE.RepeatWrapping; bump.colorSpace = THREE.NoColorSpace;
+    bump.repeat.set(22.5, 27 * FLOOR_K); bump.anisotropy = 8;
+    m.bumpMap = bump; m.bumpScale = 1.2;
+  }
   m.onBeforeCompile = (sh) => {
     sh.uniforms.tPat = { value:pat }; Object.assign(sh.uniforms, DISC);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <bumpmap_pars_fragment>', `
+    if (m.bumpMap) sh.fragmentShader = sh.fragmentShader.replace('#include <bumpmap_pars_fragment>', `
 vec2 bUV(){ vec2 dq = vWp.xz - uDiscC; float inD = step(length(dq), uDiscR); return mix(vBumpMapUv, dq / (uTile * 2.0) + 0.25, inD); }
 ` + THREE.ShaderChunk.bumpmap_pars_fragment.split('vBumpMapUv').join('bUV()'));
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;').replace('#include <project_vertex>', '#include <project_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D tPat; uniform vec2 uDiscC; uniform float uDiscR; uniform float uTile; uniform vec2 uCarH; uniform vec2 uWheel[4]; uniform float uOut; uniform vec2 uPool; varying vec3 vWp;')
       .replace('#include <map_fragment>', `#ifdef USE_MAP
   vec2 cN = vec2(45.0, 54.0);
-  vec3 gray = vec3(0.0091, 0.0097, 0.0103), red = vec3(0.202, 0.0103, 0.008);
+  vec3 gray = vec3(0.0091, 0.0097, 0.0103), red = ${SOFT_LOOK ? 'vec3(0.145, 0.0115, 0.009)' : 'vec3(0.202, 0.0103, 0.008)'};
   vec2 dq = vWp.xz - uDiscC; float dr = length(dq);
   float aa = max(fwidth(dr), 1e-4);
   float inD = 1.0 - smoothstep(uDiscR - aa, uDiscR + aa, dr);                     // turntable: fixed with the car
   float ring = smoothstep(uDiscR - uTile - aa, uDiscR - uTile + aa, dr) * inD;    // red edge, one tile wide
   vec2 tuv = mix(vMapUv * vec2(22.5, 27.0 * ${FLOOR_K.toFixed(4)}), dq / (uTile * 2.0) + 0.25, inD);
-  vec3 pt = texture2D(tPat, tuv).rgb;
-  float seam = (1.0 - smoothstep(0.0, 0.012, abs(dr - uDiscR))) ;                // thin dark gap where the platform meets the floor
+  vec3 pt = texture2D(tPat, tuv${SOFT_LOOK ? ', 0.65' : ''}).rgb;
+  float seam = 1.0 - smoothstep(0.0, ${SOFT_LOOK ? 'max(0.018, aa)' : '0.012'}, abs(dr - uDiscR));
   diffuseColor.rgb *= mix(gray, red, ring) * (1.0 - seam * 0.8);
   float pool = mix(uOut, 1.0, 1.0 - smoothstep(uPool.x, uPool.y, length(dq)));   // pool of light under the stage, dark outside
   float cShadow = 1.0;                                   // applied to the final floor light (the HDRI reflection is most of it)
@@ -1387,7 +1403,7 @@ vec2 bUV(){ vec2 dq = vWp.xz - uDiscC; float inD = step(length(dq), uDiscR); ret
       cShadow *= 1.0 - 0.8 * (1.0 - smoothstep(0.3, 1.3, dw));
     }
   }
-  diffuseColor.rgb = diffuseColor.rgb * pt.r + vec3(pt.g);
+  diffuseColor.rgb = diffuseColor.rgb * ${SOFT_LOOK ? 'mix(pt.r, 0.66, 0.38) + vec3(pt.g * 0.42)' : 'pt.r + vec3(pt.g)'};
 #endif`)
       .replace('#include <opaque_fragment>', '#ifdef USE_MAP\n  outgoingLight *= cShadow * pool;\n#endif\n#include <opaque_fragment>');
   };
@@ -1472,7 +1488,7 @@ void main(){
   }
 }
 let GLB_SIGN = false, ENV_PARTS = null, HDRI = null, PROBE = null, HDRI_K = 1, GLASS_K = 1;
-const ENV_BOOST = 2.5;   // light panels in the reflection map, relative to how they look in the room
+const ENV_BOOST = SOFT_LOOK ? 1.8 : 2.5;   // light panels in the reflection map, relative to how they look in the room
 /* HDRI -> spherical harmonics: soft ambient light from the forest.exr, with no image of it anywhere */
 /* the HDRI ambient (light probe) stays fixed, but its driver's half (+X) is mirrored onto the passenger's half,
    so the passenger side is lit exactly like the driver's side; front, back and the driver's side are unchanged */
@@ -2374,7 +2390,10 @@ function frame(now){
   if (FX.color) { paintTarget.set(FX.color); finishTarget = FIN[FX.finish] || FIN.gloss; }
   else { paintTarget.set(CAR_COLOR || '#8a8e90'); finishTarget = FIN.gloss; }
   paint.color.lerp(paintTarget, Math.min(1, dt * (FX.color ? 4 : 2.2)));
-  { const md = DIRT.uL.value * DIRT.dull, tr = finishTarget.r + (0.62 - finishTarget.r) * md, tcc = finishTarget.cc * (1 - 0.9 * md), tccr = finishTarget.ccr + (0.6 - finishTarget.ccr) * md;
+  { const md = DIRT.uL.value * DIRT.dull;
+    const roughness = SOFT_LOOK ? Math.max(finishTarget.r, 0.13) : finishTarget.r;
+    const coatRoughness = SOFT_LOOK ? Math.max(finishTarget.ccr, 0.065) : finishTarget.ccr;
+    const tr = roughness + (0.62 - roughness) * md, tcc = finishTarget.cc * (1 - 0.9 * md), tccr = coatRoughness + (0.6 - coatRoughness) * md;
     paint.roughness += (tr - paint.roughness) * k4; paint.clearcoat += (tcc - paint.clearcoat) * k4; paint.clearcoatRoughness += (tccr - paint.clearcoatRoughness) * k4; }
   /* headlight lenses */
   MICA.on = FX.mica > 0 || !!MICA.stu;
@@ -2539,12 +2558,12 @@ api.studioClose = () => { STU.free = false; if (window.__stuFree) window.__stuFr
     if (k === 'dirtR') DIRT.uR.value = v;
     if (k === 'dirtS') DIRT.uS.value = v;
     if (k === 'fov') { STU.fov = v; camera.fov = v; camera.updateProjectionMatrix(); }
-    if (k === 'refl') scene.environmentIntensity = v;
-    if (k === 'pMir') U.uPMir.value = v;
+    if (k === 'refl') scene.environmentIntensity = SOFT_LOOK ? v * 0.86 : v;
+    if (k === 'pMir') U.uPMir.value = SOFT_LOOK ? v * 0.75 : v;
     if (k === 'pDif') U.uPDif.value = v;
     if (k === 'hdri') { HDRI_K = v; if (PROBE) PROBE.intensity = v; }
     if (k === 'glass') { GLASS_K = v; U.uGlassK.value = v; reflApply(); }
-    if (k === 'exp') renderer.toneMappingExposure = v;
+    if (k === 'exp') renderer.toneMappingExposure = SOFT_LOOK ? v * 0.94 : v;
     if (k === 'cs') { CS.k = v; if (CS.plane) CS.plane.material.opacity = v; }
     if (k === 'csb') { CS.blur = v; if (CS.group) CS.dirty = true; }
     if (k === 'ao') { AO_K = v; if (gtao) { gtao.blendIntensity = v; gtao.enabled = v > 0.001; } }
