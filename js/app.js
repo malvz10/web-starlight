@@ -182,6 +182,7 @@
   const rail = $('#rail'), splitEl = $('#split'), pbar = $('#pbar');
   const lb = $('#lb'), fig = $('#lbFig'), menu = $('#menu'), menuBtn = $('#menuBtn');
   let cur = 0, busy = false, lastFx = '', layoutKey = '', studioOn = false;
+  let svcT = 0;
   const cam = { a:'hero', b:'hero', f:0, from:0, to:0, t0:0, dur:0, run:false, now:'hero' };
   function camTo(shot, dur){ if (!S || cam.now === shot) return; cam.a = cam.run && cam.f > 0.5 ? cam.b : cam.now; cam.b = shot; cam.now = shot; cam.from = 0; cam.to = 1; cam.t0 = performance.now(); cam.dur = dur; cam.run = true; }   // camera tween between two shots
   const tl = { t0:0, done:true };                                                 // the current step's own animation
@@ -190,7 +191,7 @@
     let col = 0.38, sheet = 0.44, bottom = 0;
     const st0 = steps[cur];
     if (st0 && st0.bottom && !SHEET_MQ.matches) {
-      const list = $('.svc2', st0.el), hd = $('.svc-head', st0.el);
+      const list = $('.service-grid', st0.el), hd = $('.svc-head', st0.el);
       bottom = clamp(((list ? list.getBoundingClientRect().height : 160) + 60) / innerHeight, 0.15, 0.45); col = 0;
       if (hd && innerWidth > 900) col = 0.26;   /* the car moves a little to the right, the title gets clear space on the left */
     } else if (SHEET_MQ.matches) {
@@ -256,6 +257,7 @@
     prev.el.style.setProperty('--dir', dir); nx.el.style.setProperty('--dir', dir);
     if (prev !== nx) { prev.el.classList.remove('is-on'); prev.el.classList.add('is-out'); setTimeout(() => prev.el.classList.remove('is-out'), 450); }
     if (prev.card) { prev.card.classList.remove('drag'); prev.card.style.transform = ''; prev.card.style.opacity = ''; setTimeout(() => { prev.card.scrollTop = 0; }, 400); }
+    clearTimeout(svcT);
     cur = i; nx.el.classList.add('is-on'); cam.now = nx.shot; if (st.svc >= 0) { st.svc = -1; svcMark(-1); }
     markUI();
     try { history.replaceState(null, '', '#' + (nx.chap && nx.chap.id ? nx.chap.id : 'inicio')); } catch (e) {}
@@ -321,7 +323,7 @@
   }, { passive:true });
   addEventListener('touchmove', (e) => {
     if (blocked() || multi || !tEl) return;
-    if (tEl.closest('.split,.vlt,#studio,#heroFadeControls,.gal,.svc2,.lightbox,.menu')) return;          // controls with their own drag
+    if (tEl.closest('.split,.vlt,#studio,#heroFadeControls,.gal,.service-grid,.lightbox,.menu')) return;          // controls with their own drag
     const t = e.touches[0], dx = t.clientX - tsx, dy = t.clientY - tsy;
     if (!sw) {
       if (Math.abs(dy) < 8 || Math.abs(dy) < Math.abs(dx) * 1.15) return;
@@ -377,7 +379,6 @@
   addEventListener('hashchange', () => { const id = location.hash.slice(1), k = id ? idxOf(id) : -1; if (k >= 0 && (steps[cur].chap || {}).id !== id && k !== cur) goTo(id); });
 
   /* ---------- Servicios: vista previa al pasar el cursor (tarjetas y etiquetas sobre el carro) ---------- */
-  let svcT = 0;
   function svcMark(i){ $$('#svcList a').forEach((a) => a.classList.toggle('hot', +a.dataset.svc === i)); $$('#labels .lbl3.go').forEach((l) => l.classList.toggle('hot', +l.dataset.i === i)); $('#labels').classList.toggle('focus', i >= 0); }
   function svcPreview(i){
     clearTimeout(svcT);
@@ -385,9 +386,13 @@
     svcT = setTimeout(() => { st.svc = i; svcMark(i); camTo(i >= 0 ? SVC_PREV[i].shot : steps[cur].shot, i >= 0 ? 1100 : 1000); pushFx(true); }, i >= 0 ? 90 : 320);
   }
   { const list = $('#svcList');
-    list.addEventListener('pointerover', (e) => { const a = e.target.closest('a[data-svc]'); if (a && e.pointerType === 'mouse') svcPreview(+a.dataset.svc); });
-    list.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') svcPreview(-1); });
-    list.addEventListener('focusin', (e) => { const a = e.target.closest('a[data-svc]'); if (a) svcPreview(+a.dataset.svc); });
+    for (const tile of $$('a[data-svc]', list)) {
+      const index = Number(tile.dataset.svc);
+      tile.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') svcPreview(index); });
+      tile.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') svcPreview(-1); });
+      tile.addEventListener('focus', () => svcPreview(index));
+      tile.addEventListener('blur', () => { if (!tile.matches(':hover')) svcPreview(-1); });
+    }
     const lw = $('#labels');
     lw.addEventListener('pointerover', (e) => { const l = e.target.closest('.lbl3.go'); if (l && e.pointerType === 'mouse') svcPreview(+l.dataset.i); });
     lw.addEventListener('pointerout', (e) => { const l = e.target.closest('.lbl3.go'); if (l && !l.contains(e.relatedTarget) && e.pointerType === 'mouse') svcPreview(-1); });

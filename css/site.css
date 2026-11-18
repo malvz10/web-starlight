@@ -169,23 +169,6 @@ h3{font-size:clamp(24px,2.3vw,34px);line-height:1.06;font-stretch:120%}
 .svc-head .lead{font-size:18px;max-width:46ch;color:var(--ink2)}
 .eyebrow{display:flex;align-items:center;gap:10px;margin:0 0 16px!important;font:400 11.5px/1 var(--wide)!important;letter-spacing:.2em;text-transform:uppercase;color:var(--ink)!important}
 .eyebrow::before{content:"";width:26px;height:2px;background:var(--red)}
-.svc2{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
-.svc2 a{position:relative;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto 1fr auto;column-gap:12px;row-gap:6px;height:100%;padding:16px 16px 15px;text-decoration:none;
-  background:rgba(12,12,14,.62);border:1px solid rgba(243,243,240,.12);border-radius:12px;overflow:hidden;
-  -webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);box-shadow:0 10px 30px rgba(0,0,0,.35);
-  transition:transform .45s var(--ease),border-color .3s,background .3s,box-shadow .3s}
-.svc2 .ic{grid-row:1;grid-column:1;width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:rgba(243,243,240,.07);border:1px solid rgba(243,243,240,.12);transition:background .3s,border-color .3s}
-.svc2 .ic svg{width:20px;height:20px;fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.svc2 i{grid-row:1;grid-column:2;justify-self:end;align-self:start;font:400 11px/1 var(--wide);font-style:normal;letter-spacing:.12em;color:var(--mute);transition:color .3s}
-.svc2 b{grid-column:1/-1;margin-top:10px;font:680 17px/1.15 var(--sans);font-stretch:114%;color:var(--ink)}
-.svc2 span:not(.ic){grid-column:1/-1;font-size:13.5px;line-height:1.42;color:rgba(243,243,240,.66)}
-.svc2 em{grid-column:1/-1;display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-style:normal;font-size:12.5px;font-weight:650;font-stretch:108%;color:rgba(243,243,240,.55);transition:color .3s}
-.svc2 em svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:transform .35s var(--ease)}
-.svc2 a:hover,.svc2 a:focus-visible,.svc2 a.hot{transform:translateY(-6px);background:rgba(22,22,26,.78);border-color:rgba(243,243,240,.34);box-shadow:0 18px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08)}
-.svc2 a:hover .ic,.svc2 a.hot .ic{background:var(--red);border-color:var(--red)}
-.svc2 a:hover i,.svc2 a.hot i{color:var(--ink)}
-.svc2 a:hover em,.svc2 a:focus-visible em,.svc2 a.hot em{color:var(--ink)}
-.svc2 a:hover em svg,.svc2 a.hot em svg{transform:translateX(4px)}
 body.lay-bottom #shade{background:linear-gradient(to top,rgba(5,5,6,.94) 0%,rgba(5,5,6,.6) calc(var(--bot,30) * 1%),rgba(5,5,6,0) calc(var(--bot,30) * 1% + 18%))}
 /* etiquetas del carro que se pueden tocar: píldora de vidrio oscuro con número, junto a un punto que late */
 .lbl3.go{pointer-events:none}
@@ -342,10 +325,6 @@ body.has-split .split{opacity:1}
   .info{grid-template-columns:1fr}
   .svcx .pin{padding-top:calc(var(--barh) + var(--sat) + 36vh)}
   .svc-card{gap:14px;overflow-y:auto}
-  .svc2{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -18px;padding:6px 18px;gap:8px;scrollbar-width:none}
-  .svc2::-webkit-scrollbar{display:none}
-  .svc2 li{flex:0 0 62%;scroll-snap-align:start}
-  .svc2 em{opacity:1;transform:none}
   .split .knob{top:30%}.split .tag{top:calc(30% + 52px)}
 }
 @media (max-width:380px){ .card .lead{font-size:14.5px} .ticks{grid-template-columns:1fr} }
@@ -414,82 +393,16 @@ html:root .lbl3.go span::before{font:italic 400 12px/1 "Playfair Display",Georgi
 html:root .svc-head::before{left:calc(var(--gut) * -1 - 2px);top:-60vh;width:min(1100px,72vw);height:200vh;
   background:linear-gradient(90deg,rgba(5,5,6,.9) 0%,rgba(5,5,6,.78) 32%,rgba(5,5,6,.45) 62%,rgba(5,5,6,0) 100%);
   -webkit-backdrop-filter:none;backdrop-filter:none;-webkit-mask-image:none;mask-image:none}
-/* filas de servicios: vidrio negro difuminado para que no se pierdan sobre el carro */
-
-/* servicios: botones grandes y redondos (ícono + nombre + flecha); al pasar el cursor se despliega la ficha del servicio */
-html:root .svc2{grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
-html:root .svc2 li{position:relative}
-html:root .svc2 a{display:flex;flex-direction:column;justify-content:space-between;gap:26px;min-height:156px;height:100%;padding:22px 22px 24px;border-radius:28px;overflow:visible;
-  border:1px solid rgba(255,255,255,.14);background:rgba(10,10,12,.6);-webkit-backdrop-filter:blur(18px) saturate(1.15);backdrop-filter:blur(18px) saturate(1.15);box-shadow:0 14px 36px rgba(0,0,0,.42);
-  transition:transform .45s var(--ease),background .3s,border-color .3s,box-shadow .3s}
-html:root .svc2 a::after{content:none}
-html:root .svc2 .ic{display:grid;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}
-html:root .svc2 .ic svg{width:22px;height:22px;stroke:#fff}
-html:root .svc2 b{margin:0;font:400 22px/1.12 "Playfair Display",Georgia,serif;color:#fff;letter-spacing:-.005em}
-html:root .svc2 a > span:not(.ic):not(.pop){display:none}
-html:root .svc2 .go-ar{position:absolute;top:22px;right:22px;display:grid;place-items:center;width:42px;height:42px;margin:0;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:#fff;transition:background .3s,border-color .3s,transform .45s var(--ease)}
-html:root .svc2 .go-ar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .45s var(--ease)}
-html:root .svc2 a:hover,html:root .svc2 a.hot{transform:translateY(-8px);background:rgba(16,16,18,.8);border-color:rgba(255,255,255,.3);box-shadow:0 22px 50px rgba(0,0,0,.55)}
-html:root .svc2 a:hover .ic,html:root .svc2 a.hot .ic{background:var(--red);border-color:var(--red)}
-html:root .svc2 a:hover .go-ar,html:root .svc2 a.hot .go-ar{background:var(--red);border-color:var(--red)}
-html:root .svc2 a:hover .go-ar svg,html:root .svc2 a.hot .go-ar svg{transform:rotate(45deg)}
-/* la ficha */
-html:root .svc2 .pop{position:absolute;left:0;bottom:calc(100% + 16px);width:max(100%,340px);display:grid;gap:12px;padding:22px 22px 20px;border-radius:24px;text-align:left;
-  background:rgba(10,10,12,.9);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 24px 60px rgba(0,0,0,.6);
-  opacity:0;transform:translateY(14px) scale(.97);transform-origin:bottom left;pointer-events:none;transition:opacity .3s,transform .45s var(--ease);z-index:5}
-html:root .svc2 li:nth-child(n+4) .pop{left:auto;right:0;transform-origin:bottom right}
-html:root .svc2 a:hover .pop,.svc2 a.hot .pop{opacity:1;transform:none}
-html:root .svc2 .pop strong{font:400 26px/1.1 "Playfair Display",Georgia,serif;color:#fff}
-html:root .svc2 .pop-d{font:400 14px/1.5 "Manrope",sans-serif;color:rgba(255,255,255,.72)}
-html:root .svc2 .pop-l{display:grid;gap:8px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)}
-html:root .svc2 .pop-l span{position:relative;padding-left:18px;font:500 13.5px/1.35 "Manrope",sans-serif;color:#fff}
-html:root .svc2 .pop-l span::before{content:"";position:absolute;left:0;top:.45em;width:7px;height:7px;border-radius:50%;background:var(--red)}
-html:root .svc2 .pop-f{font:600 11px/1 "Manrope",sans-serif;text-transform:uppercase;letter-spacing:.16em;color:var(--red);margin-top:2px}
-@media (max-width:1100px){ html:root .svc2{grid-template-columns:repeat(3,minmax(0,1fr))} }
-@media (max-width:600px){ html:root .svc2{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px} html:root .svc2 a{min-height:120px;padding:16px;border-radius:22px} html:root .svc2 b{font-size:18px} html:root .svc2 .go-ar{top:16px;right:16px;width:36px;height:36px} }
-@media (hover:none){ html:root .svc2 .pop{display:none} }
 /* etiquetas sobre el carro: solo el nombre */
 html:root .lbl3.go span::before{display:none}
 html:root .lbl3.go span,html:root .lbl3.go.dn span{padding:9px 16px!important}
-/* servicios v2: nombre a la izquierda y centrado verticalmente, ícono a la derecha, sin flecha */
-html:root .svc2 a{flex-direction:row-reverse;align-items:center;justify-content:space-between;gap:14px;min-height:104px;padding:18px 18px 18px 24px;border-radius:999px}
-html:root .svc2 b{flex:1;font-size:20px;line-height:1.15;text-align:left}
-html:root .svc2 .ic{flex:none;width:54px;height:54px}
-html:root .svc2 .go-ar{display:none}
-html:root .svc2 a:hover,html:root .svc2 a.hot{transform:translateY(-6px)}
-@media (max-width:1300px){ html:root .svc2 a{border-radius:28px} }
-@media (max-width:600px){ html:root .svc2 a{min-height:84px;padding:14px 14px 14px 18px} html:root .svc2 .ic{width:44px;height:44px} }
-html:root .svc2 a{border-radius:30px;padding:18px 18px 18px 26px}
-html:root .svc2 b{font-size:19px}
-/* servicios v3: pastillitas sencillas, como las del inicio (sin íconos) */
-html:root .svc2{gap:12px}
-html:root .svc2 a{flex-direction:row;justify-content:center;align-items:center;gap:0;min-height:58px;padding:14px 20px;border-radius:999px;
-  border:1px solid rgba(255,255,255,.3);background:rgba(8,8,10,.55);box-shadow:0 8px 24px rgba(0,0,0,.35)}
-html:root .svc2 .ic{display:none}
-html:root .svc2 b{flex:none;font:500 15px/1.2 "Manrope",sans-serif;letter-spacing:.01em;text-align:center}
-html:root .svc2 a:hover,html:root .svc2 a.hot{transform:translateY(-4px);background:var(--red);border-color:var(--red);box-shadow:0 12px 30px rgba(216,177,74,.35)}
-@media (max-width:600px){ html:root .svc2 a{min-height:50px;padding:12px 14px} html:root .svc2 b{font-size:14px} }
-html:root .svcx .pin{padding-bottom:clamp(60px,11vh,120px)}
-html:root .svc2 a{background:rgba(8,8,10,.26);border-color:rgba(255,255,255,.34);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:none}
-
-/* acento amarillo: sobre fondos amarillos el texto va en negro */
-html:root .svc2 a:hover b,html:root .svc2 a.hot b{color:#0a0a0c}
+/* Acento amarillo */
 html:root .tags a:hover{color:#0a0a0c}
 html:root .wa-btn:hover{color:#0a0a0c}
 html:root .wa-btn:hover svg{color:#0a0a0c}
 html:root .lbl3.go:hover span,html:root .lbl3.go.hot span{color:#fff}
 .tags a{color:var(--ink)}
 .stages li.on::before{color:#0a0a0c}
-/* servicios v4: exactamente las pastillitas del inicio, de su tamaño natural, en una fila */
-html:root .svc2{display:flex;flex-wrap:wrap;gap:10px}
-html:root .svc2 li{flex:none}
-html:root .svc2 a{display:inline-flex;min-height:0;height:auto;padding:11px 18px;gap:0;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(5,5,6,.18);
-  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:none}
-html:root .svc2 b{font:500 14px/1 "Manrope",sans-serif;letter-spacing:.01em}
-html:root .svc2 a:hover,html:root .svc2 a.hot{transform:none;background:var(--red);border-color:var(--red);box-shadow:none}
-html:root .svc2 li:nth-child(n+4) .pop{left:0;right:auto;transform-origin:bottom left}
-html:root .svc2 .pop{width:340px}
-
 /* STARLIGHT V2 · portada editorial y navegación accesible, sin alterar la escena 3D */
 html:root .top{gap:clamp(12px,2vw,26px);background:linear-gradient(to bottom,rgba(5,5,6,.94),rgba(5,5,6,.36) 85%,transparent)}
 html:root .top .brand{flex-shrink:0;width:clamp(122px,12vw,168px)}
@@ -526,48 +439,39 @@ html:root .hero .tags{gap:7px}
 .hero-fade-panel label{display:flex;justify-content:space-between;gap:12px}
 .hero-fade-panel input{width:100%;margin:0 0 4px;accent-color:var(--red)}
 .hero-fade-panel button{justify-self:start;padding:5px 9px;border:1px solid var(--line);border-radius:4px;background:none;color:inherit;font:inherit;cursor:pointer}
-/* Seis tarjetas amplias con contenido legible y preview 3D original en hover. */
-html:root .svcx .pin{padding-bottom:clamp(32px,5vh,68px)}
-html:root .svc-card{gap:clamp(14px,2vh,24px)}
-html:root .svc-head{max-width:720px}
-html:root .svc2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:100%;margin:0;padding:0}
-html:root .svc2 li{min-width:0;position:relative}
-html:root .svc2 a{display:flex;flex-direction:row-reverse;align-items:center;justify-content:space-between;
-  min-height:clamp(92px,12.5vh,130px);height:100%;gap:12px;padding:18px 20px 18px 24px;
-  border-radius:22px;border:1px solid rgba(255,255,255,.20);
-  background:linear-gradient(135deg,rgba(5,5,7,.94),rgba(9,10,13,.83));
-  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
-  box-shadow:0 16px 45px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)}
-html:root .svc2 .ic{display:grid;flex:none;width:48px;height:48px;border-radius:14px;background:rgba(216,177,74,.11);border-color:rgba(216,177,74,.23)}
-html:root .svc2 .ic svg{width:24px;height:24px;stroke:var(--red)}
-html:root .svc2 b{flex:1;font:400 clamp(18px,1.85vw,25px)/1.13 'Playfair Display',Georgia,serif;text-align:left;color:#fff}
-html:root .svc2 .go-ar{display:none}
-html:root .svc2 a:hover,html:root .svc2 a.hot{transform:translateY(-4px);
-  background:linear-gradient(135deg,rgba(24,23,21,.98),rgba(7,7,9,.96));
-  border-color:rgba(216,177,74,.70);box-shadow:0 20px 48px rgba(0,0,0,.65),0 0 0 1px rgba(216,177,74,.12)}
-html:root .svc2 a:hover b,html:root .svc2 a.hot b{color:#fff}
-html:root .svc2 a:hover .ic,html:root .svc2 a.hot .ic{background:var(--red);border-color:var(--red)}
-html:root .svc2 a:hover .ic svg,html:root .svc2 a.hot .ic svg{stroke:#111}
-html:root .svc2 .pop{width:max(100%,320px);z-index:10}
-html:root .svc2 li:nth-child(3n) .pop{left:auto;right:0;transform-origin:bottom right}
+/* Tarjetas de Servicios */
+.svcx .pin{padding-bottom:clamp(20px,3.2vh,48px)}
+.svc-card{gap:clamp(14px,2vh,24px)}
+.svc-head{max-width:720px}
+.service-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 12px;width:100%;margin:0;padding:0;list-style:none}
+.service-grid li{min-width:0}
+.service-tile{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:clamp(10px,1.15vw,18px);
+  min-height:clamp(84px,12vh,108px);height:100%;padding:12px clamp(12px,1.4vw,22px);text-decoration:none;
+  color:var(--ink);border:1px solid #42403d;border-radius:15px;
+  background:linear-gradient(112deg,#201e1b,#151517 51%,#111113);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 8px 22px rgba(0,0,0,.35);
+  transition:border-color .22s,background .22s,box-shadow .22s}
+.service-icon{display:grid;place-items:center;width:clamp(36px,3.8vw,50px);aspect-ratio:1;border:1px solid rgba(216,177,74,.34);
+  border-radius:11px;background:rgba(216,177,74,.07);color:var(--red);transition:background .22s,color .22s}
+.service-icon svg,.service-arrow{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+.service-icon svg{width:54%;height:54%}
+.service-copy{display:grid;gap:5px;text-align:left}
+.service-copy strong{font:650 clamp(14px,1.34vw,20px)/1.22 "Manrope",var(--sans);letter-spacing:-.015em}
+.service-copy > span{font:450 clamp(12px,1.05vw,15px)/1.35 "Manrope",var(--sans);color:#c9c5bc}
+.service-arrow{width:20px;height:20px;color:#b9a578;transition:color .22s,transform .22s}
+.service-tile:is(:hover,:focus-visible,.hot){border-color:var(--red);background:linear-gradient(112deg,#30271b,#1d1b18 60%,#171617);
+  box-shadow:inset 3px 0 0 var(--red),0 9px 28px rgba(0,0,0,.46)}
+.service-tile:is(:hover,:focus-visible,.hot) .service-icon{background:var(--red);color:#16120a}
+.service-tile:is(:hover,:focus-visible,.hot) .service-arrow{color:var(--red);transform:translateX(3px)}
+
 /* Sombra oscura detrás de la zona de tarjetas; sin tapar completamente el Porsche. */
 html:root .svcx::after{content:'';position:absolute;z-index:0;left:0;right:0;bottom:0;height:46%;
   background:linear-gradient(to top,rgba(2,2,4,.95),rgba(2,2,4,.8) 38%,rgba(2,2,4,.36) 75%,transparent);
   pointer-events:none}
 html:root .svcx .pin{position:absolute;z-index:1}
-@media(max-width:1100px){html:root .svc2{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:860px){
-  html:root .svc2{display:flex;flex-wrap:nowrap;gap:12px;width:auto;margin:0 -18px;padding:6px 18px 16px;overflow-x:auto}
-  html:root .svc2 li{flex:0 0 min(78vw,300px)}
-  html:root .svc2 a{min-height:108px;padding:15px 17px 15px 20px}
-  html:root .svc2 b{font-size:20px}
-  html:root .svc2 .ic{width:45px;height:45px}
-  html:root .svc2 .pop{display:none}
+  .service-grid{display:flex;gap:12px;width:auto;margin:0 -18px;padding:6px 18px 16px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+  .service-grid li{flex:0 0 min(78vw,300px);scroll-snap-align:start}
+  .service-tile{min-height:94px}
   html:root .svcx::after{height:52%}
-}
-@media(max-height:760px) and (min-width:861px){
-  html:root .svc2 a{min-height:84px;padding:12px 18px}
-  html:root .svc2 .ic{height:40px;width:40px}
-  html:root .svc2 b{font-size:18px}
-  html:root .svcx .pin{padding-bottom:22px}
 }
