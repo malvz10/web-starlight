@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://starlight-detailing-mx.pages.dev/sitemap.xml
