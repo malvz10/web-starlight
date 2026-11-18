@@ -90,7 +90,9 @@ void main(){
   vec4 c = texture2D(tDiffuse, vUv);
   ${SOFT_LOOK ? `// Blend subpixel samples in the existing output pass to soften hard edges.
   vec2 offset = vec2(0.5) / vec2(textureSize(tDiffuse, 0));
-  c.rgb = c.rgb * 0.6 + (texture2D(tDiffuse, vUv - offset).rgb + texture2D(tDiffuse, vUv + offset).rgb) * 0.2;` : ''}
+  c.rgb = c.rgb * 0.6 + (texture2D(tDiffuse, vUv - offset).rgb + texture2D(tDiffuse, vUv + offset).rgb) * 0.2;
+  // Open up the shadows and midtones while preserving the white point.
+  c.rgb = mix(c.rgb, sqrt(max(c.rgb, vec3(0.0))), 0.33);` : ''}
   float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
   c.rgb = mix(vec3(l), c.rgb, uSat);
   c.rgb = (c.rgb - 0.5) * uCon + 0.5;
@@ -1383,7 +1385,7 @@ vec2 bUV(){ vec2 dq = vWp.xz - uDiscC; float inD = step(length(dq), uDiscR); ret
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D tPat; uniform vec2 uDiscC; uniform float uDiscR; uniform float uTile; uniform vec2 uCarH; uniform vec2 uWheel[4]; uniform float uOut; uniform vec2 uPool; varying vec3 vWp;')
       .replace('#include <map_fragment>', `#ifdef USE_MAP
   vec2 cN = vec2(45.0, 54.0);
-  vec3 gray = vec3(0.0091, 0.0097, 0.0103), red = ${SOFT_LOOK ? 'vec3(0.145, 0.0115, 0.009)' : 'vec3(0.202, 0.0103, 0.008)'};
+  vec3 gray = ${SOFT_LOOK ? 'vec3(0.013, 0.014, 0.015)' : 'vec3(0.0091, 0.0097, 0.0103)'}, red = ${SOFT_LOOK ? 'vec3(0.145, 0.0115, 0.009)' : 'vec3(0.202, 0.0103, 0.008)'};
   vec2 dq = vWp.xz - uDiscC; float dr = length(dq);
   float aa = max(fwidth(dr), 1e-4);
   float inD = 1.0 - smoothstep(uDiscR - aa, uDiscR + aa, dr);                     // turntable: fixed with the car
@@ -1403,7 +1405,7 @@ vec2 bUV(){ vec2 dq = vWp.xz - uDiscC; float inD = step(length(dq), uDiscR); ret
       cShadow *= 1.0 - 0.8 * (1.0 - smoothstep(0.3, 1.3, dw));
     }
   }
-  diffuseColor.rgb = diffuseColor.rgb * ${SOFT_LOOK ? 'mix(pt.r, 0.66, 0.38) + vec3(pt.g * 0.42)' : 'pt.r + vec3(pt.g)'};
+  diffuseColor.rgb = diffuseColor.rgb * ${SOFT_LOOK ? 'mix(pt.r, 0.66, 0.38) + vec3(pt.g * 0.52)' : 'pt.r + vec3(pt.g)'};
 #endif`)
       .replace('#include <opaque_fragment>', '#ifdef USE_MAP\n  outgoingLight *= cShadow * pool;\n#endif\n#include <opaque_fragment>');
   };
@@ -2563,7 +2565,7 @@ api.studioClose = () => { STU.free = false; if (window.__stuFree) window.__stuFr
     if (k === 'pDif') U.uPDif.value = v;
     if (k === 'hdri') { HDRI_K = v; if (PROBE) PROBE.intensity = v; }
     if (k === 'glass') { GLASS_K = v; U.uGlassK.value = v; reflApply(); }
-    if (k === 'exp') renderer.toneMappingExposure = SOFT_LOOK ? v * 0.94 : v;
+    if (k === 'exp') renderer.toneMappingExposure = v;
     if (k === 'cs') { CS.k = v; if (CS.plane) CS.plane.material.opacity = v; }
     if (k === 'csb') { CS.blur = v; if (CS.group) CS.dirty = true; }
     if (k === 'ao') { AO_K = v; if (gtao) { gtao.blendIntensity = v; gtao.enabled = v > 0.001; } }
