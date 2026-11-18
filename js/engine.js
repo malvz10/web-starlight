@@ -28,36 +28,39 @@ const portrait = () => innerWidth / innerHeight < 0.9;
 const small = () => innerWidth < 700;
 const SHEET_MQ = matchMedia('(max-width:560px), (orientation:portrait) and (max-width:1100px)');
 const sheet = () => SHEET_MQ.matches;
+const PROFILE = window.__STARLIGHT_3D_PROFILE;
+const TOUCH_GPU = PROFILE?.touch === true;
+const LITE = () => PROFILE?.lite ?? small();
 
 let renderer;
-try { renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false, powerPreference:'high-performance' }); }
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias:!TOUCH_GPU, alpha:false, powerPreference:TOUCH_GPU ? 'low-power' : 'high-performance' }); }
 catch (e) { api.failed = true; setTimeout(() => api.onFail && api.onFail(e), 0); throw e; }
 let prCap = 2;
-const PH30 = matchMedia('(pointer:coarse)').matches && Math.min(screen.width, screen.height) < 700;   // phones: steady 30 fps, fixed resolution
-let Q_HIGH = true; try { Q_HIGH = localStorage.getItem('starlightQ') !== '0'; } catch (e) {}   // phone quality: high = 2x resolution + ambient occlusion
-const DPR = () => Math.min(devicePixelRatio, PH30 ? (Q_HIGH ? 1.4 : 1.15) : (innerWidth < 700 || matchMedia('(pointer:coarse)').matches) ? (Q_HIGH ? 1.75 : 1.3) : 1.75, prCap);
+let Q_HIGH = true; try { Q_HIGH = localStorage.getItem('starlightQ') !== '0'; } catch (e) {}
+const DPR = () => Math.min(devicePixelRatio, prCap, TOUCH_GPU
+  ? Math.min(Q_HIGH ? 1.15 : 0.9, Math.sqrt(900000 / Math.max(1, innerWidth * innerHeight)))
+  : 1.75);
 renderer.setPixelRatio(DPR());
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.toneMapping = THREE.AgXToneMapping;          // same view transform as the Blender scene (AgX, exposure 0)
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setClearColor(0x050506, 1);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.VSMShadowMap; renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+renderer.shadowMap.enabled = !TOUCH_GPU; renderer.shadowMap.type = THREE.VSMShadowMap; renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(34, innerWidth/innerHeight, 0.05, 60);
 
-/* post: bloom only on larger screens; phones render straight to the canvas */
-const LITE = () => small() || (matchMedia('(pointer:coarse)').matches && Math.min(innerWidth, innerHeight) < 700);
+/* Keep color processing on touch devices, skip the costly scene-wide effects. */
 const GRADE = { sat:{ value:1 }, con:{ value:1 }, pass:null };
 let composer = null, bloom = null, dof = null, mblur = null, gtao = null, AO_K = 1, BLOOM_K = 1; const mbDir = new THREE.Vector2(); let mbAz = null, mbEl = 0;
 function getComposer(){
   if (composer) return composer;
-  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type:THREE.HalfFloatType, samples:LITE() ? 2 : 4 });
+  const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type:THREE.HalfFloatType, samples:TOUCH_GPU ? 0 : LITE() ? 2 : 4 });
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   // ambient occlusion (wheel wells, under the bumpers, panel gaps): loaded on its own, so the page still runs if it can't load
-  if (!LITE()) import('three/addons/postprocessing/GTAOPass.js').then(({ GTAOPass }) => {   // AO: computer; phones only in high quality, at half resolution
+  if (!LITE()) import('three/addons/postprocessing/GTAOPass.js').then(({ GTAOPass }) => {
     const p = new GTAOPass(scene, camera, innerWidth, innerHeight); p.output = GTAOPass.OUTPUT.Default; p.blendIntensity = AO_K;
     p.updateGtaoMaterial({ radius:0.32, distanceExponent:1.4, thickness:1.0, scale:1.0, samples:LITE() ? 8 : 16, distanceFallOff:1.0 });
     if (LITE()) { const _ss = p.setSize.bind(p); p.setSize = (w, h) => _ss(Math.round(w * 0.5), Math.round(h * 0.5)); }
@@ -77,7 +80,7 @@ void main(){ vec2 r = (vUv - uC) * vec2(uAsp, 1.0); vec2 dir = uDir * (1.0 - smo
   gl_FragColor = c / w; }` });
   composer.addPass(mblur);
   mblur.enabled = false;   // smearing the thin light strips before bloom made the glow dim while orbiting
-  glowSetup(); composer.addPass(GLOW.pass);   // scene-only bloom (posts, hex panels, sign); the old full-screen bloom is gone
+  if (!TOUCH_GPU) { glowSetup(); composer.addPass(GLOW.pass); }
   composer.addPass(new OutputPass());
   GRADE.pass = new ShaderPass({ uniforms:{ tDiffuse:{ value:null }, uSat:GRADE.sat, uCon:GRADE.con },
     vertexShader:'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -371,25 +374,24 @@ shadow.rotation.x = -Math.PI/2; shadow.position.y = 0.016; shadow.renderOrder = 
 
 /* environment map = the bay itself, so the honeycomb reflects on paint and glass.
    A second map adds a PDR line board beside the door (straight reflection lines for the dent section). */
-const ENV = { main:null, pdr:null, glass:null };
+const ENV = { main:null, pdr:null, target:null };
 {
   const envScene = new THREE.Scene(); envScene.background = new THREE.Color('#040405');
   const eRig = new THREE.Group(); envScene.add(eRig);
   buildGarage(envScene, eRig, true);
   envScene.add(neon.clone());
-  const size = LITE() ? 256 : 512;
+  const size = TOUCH_GPU ? 128 : LITE() ? 256 : 512;
   const cubeRT = new THREE.WebGLCubeRenderTarget(size, { type:THREE.HalfFloatType });
   const cubeCam = new THREE.CubeCamera(0.1, 60, cubeRT); cubeCam.position.set(0, 0.95, 0.4);
   const pm = new THREE.PMREMGenerator(renderer);
   try {
-    cubeCam.update(renderer, envScene); ENV.main = pm.fromCubemap(cubeRT.texture).texture;
-    cubeCam.position.set(0, -4.5, 0.4); cubeCam.update(renderer, envScene); ENV.glass = pm.fromCubemap(cubeRT.texture).texture; cubeCam.position.set(0, 0.95, 0.4);
+    cubeCam.update(renderer, envScene); ENV.target = pm.fromCubemap(cubeRT.texture); ENV.main = ENV.target.texture;
     const pivot = new THREE.Group(), board = new THREE.Group();
     const bm = new THREE.MeshBasicMaterial({ color:new THREE.Color(1, 1, 1).multiplyScalar(4), toneMapped:false });
     for (let i = 0; i < 12; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 3.2), bm); b.position.set(0, 0.35 + i*0.19, 0); board.add(b); }
     board.position.set(5.2, 0, 0.2); pivot.add(board); pivot.rotation.y = -THREE.MathUtils.degToRad(80 - GAR.ang); envScene.add(pivot);
     cubeCam.update(renderer, envScene); ENV.pdr = pm.fromCubemap(cubeRT.texture).texture;
-  } catch (e) { console.warn('env', e); if (!ENV.main) ENV.main = pm.fromScene(envScene, 0.01).texture; }
+  } catch (e) { console.warn('env', e); if (!ENV.main) { ENV.target = pm.fromScene(envScene, 0.01); ENV.main = ENV.target.texture; } }
   scene.environment = ENV.main;
   pm.dispose(); cubeRT.dispose();
 }
@@ -1163,6 +1165,7 @@ function plateMat(o){   // rear plate: STARLIGHT, fitted to the plate's own UVs 
   return new THREE.MeshStandardMaterial({ map:t, roughness:0.32, metalness:0.05, envMapIntensity:0.7, side:THREE.DoubleSide });
 }
 function onModel(gltf){
+  if (api.failed) return;
   newCar = !!gltf.scene.getObjectByName('Modelo_Carro');
   gltf.scene.traverse((o) => {
     if (!o.isMesh) return;
@@ -1241,18 +1244,17 @@ function onModel(gltf){
   } catch (e) { console.warn('halos', e); } } doorNode = gltf.scene.getObjectByName('Puerta_Piloto_Bisagra'); DOOR_MAX = 1.1345;   // Blender: Z -65 deg -> three Y
   if (!doorNode) { doorNode = gltf.scene.getObjectByName('DoorR'); DOOR_MAX = 1.05; }
   try { car.updateMatrixWorld(true); U.uScanM.value.copy(paintMesh.matrixWorld).invert(); paintMesh.geometry.computeBoundingBox(); const bb = paintMesh.geometry.boundingBox; U.uScan.c = (bb.max.z + bb.min.z) / 2; U.uScan.r = (bb.max.z - bb.min.z) / 2 + 0.06; } catch (e) {}
-  perfT0 = performance.now() + 4000;
   try { const g = paintMesh.geometry, P = g.attributes.position, Pn = g.attributes._panel; let zmax = -9, zmin = 9, xh = 0.88;
     if (Pn) for (let i = 0; i < P.count; i++) if (Math.round(Pn.getX(i)) === 2 && P.getX(i) > 0.3) { const z = P.getZ(i); if (z > zmax) { zmax = z; xh = P.getX(i); } if (z < zmin) zmin = z; }
     if (zmax > -9) { U.uHinge.value.set(xh, zmax); U.uDoorZ.value.set(zmin, zmax); } } catch (e) { console.warn('door', e); }
   // compile every shader while the loading screen is still up, so the reveal doesn't stutter
   TM.mark('materiales listos');
-  const _ready = () => { if (api.ready) return; TM.mark('shaders compilados'); api.ready = true; api.onReady && api.onReady(); };
+  const _ready = () => { if (api.ready || api.failed) return; TM.mark('shaders compilados'); api.ready = true; invalidate(); api.onReady && api.onReady(); };
   try { (renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve(renderer.compile(scene, camera))).then(_ready, _ready); } catch (e) { _ready(); }
   setTimeout(_ready, 4000);
 }
 function b64ToBuf(b64){ const bin = atob(b64); const n = bin.length; const u = new Uint8Array(n); for (let i=0;i<n;i++) u[i] = bin.charCodeAt(i); return u.buffer; }
-function fail(e){ console.error(e); api.failed = true; api.onFail && api.onFail(e); }
+function fail(e){ console.error(e); api.failed = true; stopFrames(); api.onFail && api.onFail(e); }
 function parseB64(b64){ loader.parse(b64ToBuf(b64), '', onModel, fail); }
 function unfilterGLB(buf){
   const dv = new DataView(buf), jl = dv.getUint32(12, true);
@@ -1393,22 +1395,27 @@ vec2 bUV(){ vec2 dq = vWp.xz - uDiscC; float inD = step(length(dq), uDiscR); ret
   return m;
 }
 function rebuildEnv(parts){
+  const boostM = [LUM.haz.m, LUM.col.m, ...LUM.sign.ms].filter(Boolean), boostV = boostM.map((m) => m.emissiveIntensity);
+  let rt, pm;
   try {
     // reflections show the real bay (no HDRI trees): dark walls, and the hex panels / columns / sign as bright, defined stripes
     const es = new THREE.Scene(); es.background = new THREE.Color('#040405');
     for (const p of parts) { const c = p.clone(true); c.position.copy(p.position); es.add(c); }
-    var boostM = [LUM.haz.m, LUM.col.m, ...LUM.sign.ms].filter(Boolean), boostV = boostM.map((m) => m.emissiveIntensity);
     boostM.forEach((m) => { m.emissiveIntensity *= ENV_BOOST; });
     if (!GLB_SIGN) es.add(neon.clone());
-    const sz = LITE() ? 256 : 512, rt = new THREE.WebGLCubeRenderTarget(sz, { type:THREE.HalfFloatType });
-    const cc = new THREE.CubeCamera(0.1, 60, rt), pm = new THREE.PMREMGenerator(renderer);
-    cc.position.set(0, 0.95, 0.4); cc.update(renderer, es); const main = pm.fromCubemap(rt.texture).texture;
+    const sz = TOUCH_GPU ? 128 : LITE() ? 256 : 512;
+    rt = new THREE.WebGLCubeRenderTarget(sz, { type:THREE.HalfFloatType });
+    const cc = new THREE.CubeCamera(0.1, 60, rt); pm = new THREE.PMREMGenerator(renderer);
+    cc.position.set(0, 0.95, 0.4); cc.update(renderer, es);
+    const previous = ENV.target, was = scene.environment === ENV.main;
+    ENV.target = pm.fromCubemap(rt.texture); ENV.main = ENV.target.texture;
+    if (was) scene.environment = ENV.main;
+    previous?.dispose();
+  } catch (e) { console.warn('env (garage)', e); }
+  finally {
     boostM.forEach((m, i) => { m.emissiveIntensity = boostV[i]; });
-    const gls = main;                                     // glass reflects the bay from car height (was: from under the floor)
-    const was = scene.environment === ENV.main; ENV.main = main; ENV.glass = gls;
-    if (was) scene.environment = main;
-    pm.dispose(); rt.dispose();
-  } catch (e) { console.warn('env (garage)', e); try { boostM.forEach((m, i) => { m.emissiveIntensity = boostV[i]; }); } catch (_) {} }
+    pm?.dispose(); rt?.dispose();
+  }
 }
 const WALLS = [], BACKW = []; let WALL_K = 0.35, BACK_K = 1;
 function signGlow(){ if (SIGN_GLOW) SIGN_GLOW.material.color.setScalar(Math.min(2, BACK_K * LUM.sign.k)); }
@@ -1498,7 +1505,7 @@ function shFromEquirect(d, W, H){
    softly around the body. Re-rendered only when the car changes (door). */
 const CS = { group:null, k:0.85, blur:2.6, dark:1.5, H:0.8, dirty:false };
 function initContactShadow(cc, cs, floorY){
-  const W = cs.x + 1.8, D = cs.z + 1.8, R = 512, Rh = Math.round(R * D / W);
+  const W = cs.x + 1.8, D = cs.z + 1.8, R = TOUCH_GPU ? 256 : 512, Rh = Math.round(R * D / W);
   CS.rt = new THREE.WebGLRenderTarget(R, Rh); CS.rt.texture.generateMipmaps = false;
   CS.rtB = new THREE.WebGLRenderTarget(R, Rh); CS.rtB.texture.generateMipmaps = false;
   const g = new THREE.PlaneGeometry(W, D).rotateX(Math.PI / 2);
@@ -1538,14 +1545,14 @@ function renderContactShadow(){
   scene.background = null; scene.overrideMaterial = CS.depth; renderer.setClearColor(0x000000, 0);
   renderer.setRenderTarget(CS.rt); renderer.clear(); renderer.render(scene, CS.cam);
   scene.overrideMaterial = null;
-  csBlur(CS.blur); csBlur(CS.blur * 0.4);
+  csBlur(CS.blur); if (!TOUCH_GPU) csBlur(CS.blur * 0.4);
   renderer.setRenderTarget(null); renderer.setClearColor(col, ca); scene.background = bg;
   for (const o of hidden) o.visible = true; CS.plane.visible = true;
 }
 /* PÁGINA 0 «Estudio»: panel de ajustes + cámara del estudio (bloqueada salvo con «Cámara libre»). Los ajustes se aplican en todas las páginas. */
 let STUDIO = false;   // true while page 0 (#estudio) is on screen: settings panel + studio camera
 let CAMEDIT = false; let PANEL_OY = 0;   // phones: while the settings sheet is open the picture shifts up so the car stays visible above it  // Inicio: «Acomodar cámara» on -> the fingers move the camera (free), saved on the second tap
-window.__stu = (on) => { if (STUDIO === on) return; STUDIO = on; document.body.classList.toggle('studio', on); if (!on) { STU.free = false; document.body.classList.remove('camfree'); } setFov(); if (window.__stuFree) window.__stuFree(); };
+window.__stu = (on) => { if (STUDIO === on) return; STUDIO = on; document.body.classList.toggle('studio', on); if (!on) { STU.free = false; document.body.classList.remove('camfree'); } setFov(); invalidate(); if (window.__stuFree) window.__stuFree(); };
 const CAM_MAX_Y = GAR.lightY - 0.6;   // highest camera point: just under where the ceiling used to lift away
 function fitK(){ const a = innerWidth / Math.max(1, innerHeight); return a >= 1.2 ? 1 : Math.min(3.2, 1.2 / a); }   // tall screens: step back so the car fits across
 function camMaxEl(){ return THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp((CAM_MAX_Y - STU.ty) / Math.max(STU.dist, 0.1), -1, 1))); }
@@ -1563,9 +1570,10 @@ const LUM = { sign:{ ms:[], base:[] , k:1 }, haz:{ m:null, base:1.6, k:1 }, col:
   // no sun under the HDRI: its hard shadow was fixed to the car and swung with it across the bay floor.
   // grounding comes from the soft contact shadow under the body (floor shader + blob), which follows the car.
   sun.castShadow = false; sunShadowPlane.visible = false; renderer.shadowMap.needsUpdate = true;
-  rebuildEnv(ENV_PARTS || []);
+  if (!TOUCH_GPU) rebuildEnv(ENV_PARTS || []);
 } catch (e) { console.warn('hdri', e); } })();
 function onGarage(gltf){
+  if (api.failed) return;
   TM.mark('escenario cargado');
   const root = gltf.scene; root.position.copy(GOFF);
   // hide the code-built bay; keep the STARLIGHT sign, its wall glow and the lights
@@ -1615,9 +1623,10 @@ function onGarage(gltf){
     else { o.castShadow = false; o.receiveShadow = true; }
   };
   root.traverse((o) => visit(o, root)); ceilG.traverse((o) => visit(o, ceilG));
-  try { addBeams(ceilG); } catch (e) { console.warn('beams', e); }
+  if (!TOUCH_GPU) try { addBeams(ceilG); } catch (e) { console.warn('beams', e); }
   ENV_PARTS = [root, ceilG];
   rebuildEnv(ENV_PARTS);
+  invalidate();
 }
 (async function fetchGarage(){
   try { const ab = await fetchGz('assets/models/garage.gz.png?v=3'); unfilterGLB(ab); loader.parse(ab, '', onGarage, (e) => console.warn('garage', e)); return; } catch (e) { console.warn('garage gz', e); }
@@ -1636,7 +1645,7 @@ const _up = new THREE.Vector3(0, 1, 0);
 const rig = { az:18, el:4, dist:9, tx:0.05, ty:0.58, tz:0.15, ox:0, oy:0, fov:46 };
 const cam = { ...rig }; let snapCam = true;
 const LAYOUT = { col:0.38, sheet:0.44, bottom:0 };
-api.setLayout = (col, sheet, bottom) => { LAYOUT.col = col; LAYOUT.sheet = sheet; LAYOUT.bottom = bottom || 0; };
+api.setLayout = (col, sheet, bottom) => { LAYOUT.col = col; LAYOUT.sheet = sheet; LAYOUT.bottom = bottom || 0; invalidate(); };
 
 /* shots: az = turn around the car (0 = in front, 90 = driver side), el = height angle, t = point looked at,
    w = how many metres must fit across the free part of the screen (wide shots only) */
@@ -1684,14 +1693,14 @@ function frameShot(name){
 }
 const VIEW = { a:'hero', b:'hero', f:0 };
 let curShot = 'hero';
-api.view = (a, b, f) => { VIEW.a = a || 'hero'; VIEW.b = b || VIEW.a; VIEW.f = clamp01(f || 0); const n = VIEW.f < 0.5 ? VIEW.a : VIEW.b; if (n !== curShot) { curShot = n; dragT = 0; } };
-api.snap = () => { snapCam = true; };
+api.view = (a, b, f) => { VIEW.a = a || 'hero'; VIEW.b = b || VIEW.a; VIEW.f = clamp01(f || 0); const n = VIEW.f < 0.5 ? VIEW.a : VIEW.b; if (n !== curShot) { curShot = n; dragT = 0; } invalidate(); };
+api.snap = () => { snapCam = true; invalidate(); };
 
 /* ---------- service effects ---------- */
 const FX_DEF = { dirt:0, washZ:9, wash:0, washP:0, tintAll:0, swirl:0, swirlX:2, wax:0, waxZ:3, gloss:0, door:0, cabin:0, film:0, filmZ:3, clear:0, rocks:0, squee:0, pkg:null,
   color:null, finish:'gloss', rain:0, rainSplit:0, split:null, vlt:20, mica:0, frost:0, micaClean:0, dent:0, push:0, pdrEnv:0, lamp:null, labels:null };
 let FX = { ...FX_DEF };
-api.fx = (o) => { FX = { ...FX_DEF, ...(o || {}) }; if (FX.labels !== curLblKey) labels(FX.labels); };
+api.fx = (o) => { FX = { ...FX_DEF, ...(o || {}) }; if (FX.labels !== curLblKey) labels(FX.labels); invalidate(); };
 const FIN = { gloss:{ r:0.05, cc:1, ccr:0.01 }, satin:{ r:0.5, cc:0.55, ccr:0.32 }, matte:{ r:0.72, cc:0.2, ccr:0.62 } };
 let finishTarget = FIN.gloss;
 const paintTarget = new THREE.Color('#8a8e90'); let CAR_COLOR = null;
@@ -1733,7 +1742,7 @@ function labels(k){
 }
 
 /* ---------- rain & beads ---------- */
-const RN = 900, rainPos = new Float32Array(RN * 6);
+const RN = TOUCH_GPU ? 360 : 900, rainPos = new Float32Array(RN * 6);
 const rainGeo = new THREE.BufferGeometry(); rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
 const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color:0xdfe8f2, transparent:true, opacity:0, depthWrite:false }));
 rain.frustumCulled = false; scene.add(rain);
@@ -1741,7 +1750,7 @@ const drops = Array.from({ length:RN }, () => ({}));
 function resetDrop(d, top){ d.x = (Math.random()-0.5)*(rainSplit ? 1.5 : 1.9); d.z = 0.55 + Math.random()*1.75; d.y = top ? 1.0 + Math.random()*3.2 : 3.0 + Math.random()*1.2; d.v = 6.5 + Math.random()*2; }
 drops.forEach(d => resetDrop(d, true));
 /* beads: tiny water drops that land on the hood, sit, merge with their neighbours and, once heavy enough, slide down the slope */
-const BN = 2400;
+const BN = TOUCH_GPU ? 800 : 2400;
 const beadMat = new THREE.MeshPhysicalMaterial({ color:0xdfe6ee, roughness:0.02, metalness:0, transparent:true, opacity:0.62, clearcoat:1, clearcoatRoughness:0, envMapIntensity:3.2, depthWrite:false });
 const beads = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), beadMat, BN); beads.instanceMatrix.setUsage(THREE.DynamicDrawUsage); beads.frustumCulled = false; scene.add(beads);
 const B = Array.from({ length:BN }, () => ({ live:false })); let bi = 0;
@@ -1778,8 +1787,9 @@ function stepRain(dt){
     const a = B[j], big = a.r >= b.r ? a : b, sm = big === a ? b : a;
     big.r = Math.min(0.012, Math.cbrt(big.r*big.r*big.r + sm.r*sm.r*sm.r)); big.vx += sm.vx * 0.3; big.vz += sm.vz * 0.3; sm.live = false;
     if (big === b) cellMap.set(key, i); }
+  let visibleBeads = 0;
   for (let i=0;i<BN;i++){ const b=B[i];
-    if (!b.live){ _m.makeScale(0,0,0); beads.setMatrixAt(i,_m); continue; }
+    if (!b.live) continue;
     b.age += dt;
     if (b.on){ const e=0.015, h0=hAt(b.x,b.z);
       if (h0===null){ b.on=false; }
@@ -1793,11 +1803,13 @@ function stepRain(dt){
     else { b.vy -= 9.8*dt; b.y += b.vy*dt; b.x += b.vx*dt; b.z += b.vz*dt;
       if (b.mist) { const h = hAt(b.x, b.z); if (b.age > 0.05 && h !== null && b.y <= h) { if (b.r < 0.0012) b.live = false; else { b.on = true; b.mist = false; b.y = h; b.vx = b.vz = 0; } } }
       if (b.y < 0 || b.age > 4) b.live=false; }
-    if ((b.flat && b.age > 6) || b.age > 40) { b.live = false; _m.makeScale(0,0,0); beads.setMatrixAt(i,_m); continue; }
+    if ((b.flat && b.age > 6) || b.age > 40) b.live = false;
+    if (!b.live) continue;
     const ra = b.r * rainAmt, sq = b.on ? (b.flat ? 0.12 : 0.5) : 1.0, st = b.on ? 1 + Math.min(0.8, Math.hypot(b.vx, b.vz) * 6) : 1;
     if (st > 1.01) _q.setFromAxisAngle(_up, Math.atan2(b.vx, b.vz)); else _q.identity();
-    _p.set(b.x, b.flat ? b.y - b.r*0.3 : b.y, b.z); _s.set(ra, ra*sq, ra*(b.on ? st : 1.25)); _m.compose(_p,_q,_s); beads.setMatrixAt(i,_m); }
-  beads.instanceMatrix.needsUpdate = true;
+    _p.set(b.x, b.flat ? b.y - b.r*0.3 : b.y, b.z); _s.set(ra, ra*sq, ra*(b.on ? st : 1.25)); _m.compose(_p,_q,_s); beads.setMatrixAt(visibleBeads++, _m); }
+  beads.count = visibleBeads;
+  if (visibleBeads) beads.instanceMatrix.needsUpdate = true;
 }
 /* =====================================================================
    PRESSURE WASHER (Detallado -> Lavado y descontaminación)
@@ -1880,7 +1892,7 @@ void main(){
 }` });
 const fan = new THREE.Mesh(fanGeo, fanMat); fan.frustumCulled = false; washG.add(fan);
 /* droplets: streaks along the jet + splash off the panel + mist; one point system with per-point size and alpha */
-const WP = 520, wpPos = new Float32Array(WP * 3), wpSz = new Float32Array(WP), wpA = new Float32Array(WP);
+const WP = TOUCH_GPU ? 280 : 520, wpPos = new Float32Array(WP * 3), wpSz = new Float32Array(WP), wpA = new Float32Array(WP);
 const wpV = new Float32Array(WP * 3), wpL = new Float32Array(WP), wpT = new Uint8Array(WP);   /* velocity, life, type (1 jet, 2 splash, 3 mist) */
 const wpGeo = new THREE.BufferGeometry();
 wpGeo.setAttribute('position', new THREE.BufferAttribute(wpPos, 3)); wpGeo.setAttribute('aS', new THREE.BufferAttribute(wpSz, 1)); wpGeo.setAttribute('aA', new THREE.BufferAttribute(wpA, 1));
@@ -2207,8 +2219,8 @@ function stepSqueegee(dt, on){
 /* ---------- before / after line (tint, headlights) ---------- */
 let splitCss = -1, splitTouched = false, splitAuto = true, splitT = 0;
 const _f = new THREE.Vector3();
-api.setSplit = (px, user) => { splitCss = px; if (user) { splitTouched = true; splitAuto = false; } };
-api.resetSplit = () => { splitTouched = false; splitAuto = true; };
+api.setSplit = (px, user) => { splitCss = px; if (user) { splitTouched = true; splitAuto = false; } invalidate(); };
+api.resetSplit = () => { splitTouched = false; splitAuto = true; invalidate(); };
 function stepSplit(dt){
   U.uSplitOn.value += ((splitMode ? 1 : 0) - U.uSplitOn.value) * Math.min(1, dt * 5);
   U.uSplitGlow.value += ((splitMode === 'tint' ? 1 : 0) - U.uSplitGlow.value) * Math.min(1, dt * 4);
@@ -2242,15 +2254,50 @@ function setFov(){ camera.aspect = innerWidth / innerHeight; camera.updateProjec
 function applyPR(){ renderer.setPixelRatio(DPR()); renderer.setSize(innerWidth, innerHeight, false);
   if (composer) { composer.setPixelRatio(DPR()); composer.setSize(innerWidth, innerHeight); glowSize(); } }
 let rzT = 0;
-function resize(){ applyPR(); setFov(); clearTimeout(rzT); rzT = setTimeout(() => { snapCam = true; }, 60); }
+function resize(){
+  clearTimeout(rzT);
+  if (!TOUCH_GPU) { applyPR(); setFov(); }
+  rzT = setTimeout(() => {
+    if (TOUCH_GPU) { applyPR(); setFov(); }
+    snapCam = true;
+    invalidate();
+  }, TOUCH_GPU ? 100 : 60);
+}
 setFov();
 addEventListener('resize', resize);
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let last = performance.now(), dragAz = 0, dragT = 0, dragV = 0, dragHeld = false, mx = 0, homeK = 1, mxS = 0, homeSpin = 0, spinPh = 0;
+let dragAz = 0, dragT = 0, dragV = 0, dragHeld = false, mx = 0, homeK = 1, mxS = 0, homeSpin = 0;
 addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') mx = e.clientX / innerWidth - 0.5; });
 const _v = new THREE.Vector3();
-let paused = false, perfT0 = Infinity;
-api.pause = (p) => { paused = !!p; };
+let paused = false, frameId = 0, last = 0, nextFrame = 0, renderUntil = 0;
+function requestFrame(){
+  if (!frameId && !paused && !document.hidden && !api.failed) frameId = requestAnimationFrame(frame);
+}
+function stopFrames(){
+  if (frameId) cancelAnimationFrame(frameId);
+  frameId = 0;
+  last = nextFrame = 0;
+}
+function invalidate(){
+  if (!TOUCH_GPU) return;
+  // Give camera and material easing time to settle after an input or chapter change.
+  renderUntil = performance.now() + 2000;
+  requestFrame();
+}
+function resumeFrames(){
+  invalidate();
+  requestFrame();
+}
+api.pause = (p) => { paused = !!p; if (paused) stopFrames(); else resumeFrames(); };
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopFrames(); else resumeFrames();
+});
+if (TOUCH_GPU) {
+  canvas.addEventListener('webglcontextlost', () => fail(new Error('WebGL context lost')));
+  for (const event of ['pointermove', 'click', 'input', 'wheel']) {
+    addEventListener(event, () => { if (STUDIO || CAMEDIT) invalidate(); }, { capture:true, passive:true });
+  }
+}
 function lerpShot(A, B, e){
   const o = {}; let dA = ((B.az - A.az + 540) % 360) - 180;
   for (const k in A) o[k] = A[k] + ((B[k] ?? A[k]) - A[k]) * e;
@@ -2258,21 +2305,22 @@ function lerpShot(A, B, e){
 }
 /* adaptive quality: aim for a smooth 60; if the device can't keep up, step down (AO, glow every other frame,
    resolution, glow off) and only as a last resort hold a steady 30. Never steps back up within a visit. */
-let FCAP = 0;
+let frameInterval = TOUCH_GPU ? 1000 / 30 : 0;
 const PERF = { tier:0, acc:0, n:0, t0:0, glowSkip:false, glowOff:false, fc:0 };
 function perfApply(){ const t = PERF.tier;
+  if (TOUCH_GPU) { prCap = Math.min(prCap, Math.max(0.65, DPR() * 0.83)); applyPR(); return; }
   if (t >= 1 && gtao) gtao.enabled = false;
   PERF.glowSkip = t >= 2;
   if (t === 3) { prCap = Math.max(1, DPR() * 0.82); applyPR(); }
   if (t === 4) { prCap = 1; applyPR(); PERF.glowOff = true; }
-  if (t >= 5) FCAP = 30;
+  if (t >= 5) frameInterval = 1000 / 30;
   console.info('[Starlight] calidad automática, nivel', t); }
 function perfStep(ms, now){
   if (!api.ready || STUDIO || document.hidden || TRANS.busy) { PERF.acc = 0; PERF.n = 0; return; }
   if (!PERF.t0) PERF.t0 = now + 2500; if (now < PERF.t0) return;
   PERF.acc += Math.min(ms, 60); PERF.n++;
   if (PERF.n >= 45) { const avg = PERF.acc / PERF.n; PERF.acc = 0; PERF.n = 0;
-    if (avg > (FCAP ? 38 : 20.5) && PERF.tier < 5) { PERF.tier++; perfApply(); PERF.t0 = now + 1500; } }
+    if (avg > (frameInterval ? 40 : 20.5) && PERF.tier < (TOUCH_GPU ? 2 : 5)) { PERF.tier++; perfApply(); PERF.t0 = now + 1500; } }
 }
 const TRANS = { busy:false };   /* a new section's shaders are compiling: don't count those frames */
 api.quality = () => PERF.tier;
@@ -2281,10 +2329,18 @@ api.quality = () => PERF.tier;
 const HERO_CINE = [[0, 0, 1, 0], [-24, -2.5, 0.94, -0.14], [-46, -1, 0.8, -0.1], [14, 4, 1.22, 0], [64, -2.5, 1.06, -0.16], [112, 2, 1.12, -0.05]];
 let cineElS = 0, cineDS = 1, cineTyS = 0;
 function frame(now){
-  requestAnimationFrame(frame);
-  if (FCAP && now - last < FCAP - 2) return;
-  const ms = now - last, dt = Math.min(0.05, ms / 1000); last = now;
-  if (document.hidden || paused) return;
+  frameId = 0;
+  if (document.hidden || paused || api.failed) { stopFrames(); return; }
+  if (now + 1 < nextFrame) { requestFrame(); return; }
+  const ms = last ? now - last : (frameInterval || 1000 / 60), dt = Math.min(0.05, ms / 1000);
+  last = now;
+  if (frameInterval) {
+    // Preserve 30 fps on both 60 Hz and 120 Hz displays, without catching up missed frames.
+    nextFrame = Math.max(nextFrame + frameInterval, now + frameInterval - 1);
+  }
+  // Rain, moving lights, impact demos and an automatic comparison remain live in their chapters.
+  if (!TOUCH_GPU || now < renderUntil || FX.rain || FX.rainSplit || FX.lamp || FX.rocks || (FX.split && splitAuto)) requestFrame();
+  else stopFrames();
   perfStep(ms, now);
   DIRT.uT.value = now / 1000;
   const k4 = Math.min(1, dt * 4), k3 = Math.min(1, dt * 3);
@@ -2360,12 +2416,12 @@ function frame(now){
   dragAz += (dragT - dragAz) * Math.min(1, dt * 7);
   /* home: a slow cinematic camera that drifts between a few takes (around, closer, further, a little higher), easing from one to the next */
   let spinT = 0, cineEl = 0, cineD = 1, cineTy = 0;
-  if (hero && !REDUCED) { const C = HERO_CINE, seg = 13, t = now / 1000 / seg, i = Math.floor(t), u = THREE.MathUtils.clamp(((t - i) - 0.45) / 0.55, 0, 1), e = u * u * u * (u * (u * 6 - 15) + 10);   /* hold, then a long, eased move */
+  if (hero && !REDUCED && !TOUCH_GPU) { const C = HERO_CINE, seg = 13, t = now / 1000 / seg, i = Math.floor(t), u = THREE.MathUtils.clamp(((t - i) - 0.45) / 0.55, 0, 1), e = u * u * u * (u * (u * 6 - 15) + 10);   /* hold, then a long, eased move */
     const a = C[i % C.length], b = C[(i + 1) % C.length];
     spinT = a[0] + (b[0] - a[0]) * e + 0.9 * Math.sin(now / 5200); cineEl = a[1] + (b[1] - a[1]) * e + 0.25 * Math.sin(now / 6100); cineD = a[2] + (b[2] - a[2]) * e; cineTy = a[3] + (b[3] - a[3]) * e; }
   homeSpin += (spinT - homeSpin) * Math.min(1, dt * 0.9);
   { const k = Math.min(1, dt * 0.9); cineElS += (cineEl - cineElS) * k; cineDS += (cineD - cineDS) * k; cineTyS += (cineTy - cineTyS) * k; }
-  const idle = (COARSE && !REDUCED && !STUDIO) ? Math.sin(now / 5200) * 1.5 + Math.sin(now / 12400) * 0.6 : 0;
+  const idle = (COARSE && !TOUCH_GPU && !REDUCED && !STUDIO) ? Math.sin(now / 5200) * 1.5 + Math.sin(now / 12400) * 0.6 : 0;
   const mAz = 0;   /* the car never follows the mouse */
   const azD = cam.az + dragAz + homeSpin + mAz + idle * 3 * (1 - homeK);
   const az = deg(azD), el = deg(THREE.MathUtils.clamp(cam.el + cineElS * homeK, 1, 65));
@@ -2386,7 +2442,13 @@ function frame(now){
   U.uSplit.value = splitCss < 0 ? -1 : splitCss * renderer.getPixelRatio();
   if (CS.dirty && CS.group) { CS.dirty = false; try { renderContactShadow(); } catch (e) { console.warn('contact shadow', e); } }
   if (api.ready && !TM.first) { TM.first = true; requestAnimationFrame(() => TM.mark('primer cuadro con el carro')); }
-  { const c = getComposer(); if (PERF.glowOff) GLOW.pass.enabled = false; else if (!PERF.glowSkip || !(PERF.fc++ & 1) || !GLOW.pass.enabled) GLOW.pass.enabled = renderGlow(); c.render(); }
+  { const c = getComposer();
+    if (GLOW.pass) {
+      if (PERF.glowOff) GLOW.pass.enabled = false;
+      else if (!PERF.glowSkip || !(PERF.fc++ & 1) || !GLOW.pass.enabled) GLOW.pass.enabled = renderGlow();
+    }
+    c.render();
+  }
 
   /* labels follow their point on the car; hidden when that side faces away */
   const sm = innerWidth < 700, placed = [], vis = [];
@@ -2418,7 +2480,7 @@ api.bindDrag = (z) => {
   addEventListener('pointermove', (e) => { if (!down) return; const dx = e.clientX - sx, dy = e.clientY - sy;
     if (horiz === null && Math.hypot(dx, dy) > 8) horiz = Math.abs(dx) > Math.abs(dy) * 1.2;
     if (horiz) { dragT = a0 - dx * 0.25; document.body.classList.add('grabbing');
-      const t = performance.now(), dtm = Math.max(8, t - lt); dragV = dragV * 0.6 + (-(e.clientX - lx) * 0.25 / dtm * 1000) * 0.4; lx = e.clientX; lt = t; } });
+      const t = performance.now(), dtm = Math.max(8, t - lt); dragV = dragV * 0.6 + (-(e.clientX - lx) * 0.25 / dtm * 1000) * 0.4; lx = e.clientX; lt = t; invalidate(); } });
   const up = () => { if (!down) return; down = false; dragHeld = false; document.body.classList.remove('grabbing');
     if (performance.now() - lt > 90) dragV = 0; dragV = THREE.MathUtils.clamp(dragV, -160, 160); };
   addEventListener('pointerup', up); addEventListener('pointercancel', up);
@@ -2447,7 +2509,7 @@ api.studioClose = () => { STU.free = false; if (window.__stuFree) window.__stuFr
   let REMOTE_APPLYING = false, STU_READY = false;
   const stuSave = () => { try { localStorage.setItem('starlightStudio', JSON.stringify(V)); } catch (e) {} if (STU_READY && !REMOTE_APPLYING && window.__stuPush) window.__stuPush(V); };
   let envT = 0;
-  const envSoon = () => { clearTimeout(envT); envT = setTimeout(() => { if (ENV_PARTS || HDRI) rebuildEnv(ENV_PARTS || []); }, 120); };
+  const envSoon = () => { clearTimeout(envT); envT = setTimeout(() => { if (!api.failed && (ENV_PARTS || HDRI)) { rebuildEnv(ENV_PARTS || []); invalidate(); } }, 120); };
   const apply = (k, rebuild) => {
     const v = V[k];
     if (k === 'sign') { LUM.sign.k = v; LUM.sign.ms.forEach((m, i) => { m.emissiveIntensity = LUM.sign.base[i] * v; }); signGlow(); }
@@ -2514,7 +2576,7 @@ api.studioClose = () => { STU.free = false; if (window.__stuFree) window.__stuFr
       if (mode !== 'v') inp.dispatchEvent(new Event('change', { bubbles:true })); tid = null; mode = null; });
   }
   const qBtn = document.getElementById('stQ');   // phone quality (reloads to rebuild the render setup)
-  qBtn.textContent = Q_HIGH ? 'Calidad alta (1.4x + sombras)' : 'Calidad normal (más fluida)'; qBtn.classList.toggle('on', Q_HIGH);
+  qBtn.textContent = Q_HIGH ? 'Calidad equilibrada' : 'Ahorro de energía'; qBtn.classList.toggle('on', Q_HIGH);
   qBtn.onclick = () => { try { localStorage.setItem('starlightQ', Q_HIGH ? '0' : '1'); } catch (e) {} location.reload(); };
   if (V.home && V.home.dist) HOMEV = { ...HOMEV, ...V.home };
   const homeBtn = document.getElementById('stHome');
@@ -2649,4 +2711,4 @@ api.studioClose = () => { STU.free = false; if (window.__stuFree) window.__stuFr
   STU_READY = true;
   if (window.__REMOTE_LATE) window.__stuLoad(window.__REMOTE_LATE);
 })();
-requestAnimationFrame(frame);
+resumeFrames();

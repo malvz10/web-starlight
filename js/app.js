@@ -144,7 +144,7 @@
   steps.forEach((s, i) => { if (!s.dur || !s.card) return;
     const b = document.createElement('button'); b.type = 'button'; b.className = 'replay';
     b.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M12 1.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Ver de nuevo';
-    b.addEventListener('click', () => { if (cur === i) { tl.t0 = performance.now(); tl.done = false; b.classList.remove('on'); } });
+    b.addEventListener('click', () => { if (cur === i) { tl.t0 = performance.now(); tl.done = false; b.classList.remove('on'); requestTick(); } });
     s.card.appendChild(b); s.replay = b; });
   steps.forEach((s) => { if (!s.card) return; [...s.card.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 9))); });
 
@@ -184,7 +184,7 @@
   let cur = 0, busy = false, lastFx = '', layoutKey = '', studioOn = false;
   let svcT = 0;
   const cam = { a:'hero', b:'hero', f:0, from:0, to:0, t0:0, dur:0, run:false, now:'hero' };
-  function camTo(shot, dur){ if (!S || cam.now === shot) return; cam.a = cam.run && cam.f > 0.5 ? cam.b : cam.now; cam.b = shot; cam.now = shot; cam.from = 0; cam.to = 1; cam.t0 = performance.now(); cam.dur = dur; cam.run = true; }   // camera tween between two shots
+  function camTo(shot, dur){ if (!S || cam.now === shot) return; cam.a = cam.run && cam.f > 0.5 ? cam.b : cam.now; cam.b = shot; cam.now = shot; cam.from = 0; cam.to = 1; cam.t0 = performance.now(); cam.dur = dur; cam.run = true; requestTick(); }
   const tl = { t0:0, done:true };                                                 // the current step's own animation
   function setLayout(card){
     if (!S) return;
@@ -219,16 +219,22 @@
     const s = steps[cur];
     if (snap) { cam.run = false; cam.now = s.shot; cam.a = cam.b = s.shot; cam.f = 0; S.view(s.shot, s.shot, 0); S.snap(); }
     pushFx(true); layoutKey = ''; setLayout(s.card);
+    requestTick();
   }
-  /* one loop drives the camera tween and the step animations (nothing hangs off scroll events) */
+  /* The page only needs animation frames while a camera tween or a timed demo is running. */
+  let tickId = 0;
+  function requestTick(){
+    if (!tickId && S && !studioOn && !document.hidden && (cam.run || (steps[cur].dur && !tl.done))) tickId = requestAnimationFrame(tick);
+  }
   function tick(now){
-    requestAnimationFrame(tick);
-    if (!S || studioOn) return;
+    tickId = 0;
+    if (!S || studioOn || document.hidden) return;
     if (cam.run) { const t = clamp((now - cam.t0) / cam.dur); cam.f = lerp(cam.from, cam.to, ease(t)); S.view(cam.a, cam.b, cam.f);
       if (t >= 1) { cam.run = false; if (cam.to >= 1) { cam.a = cam.b; cam.f = 0; S.view(cam.a, cam.a, 0); } } }
     if (steps[cur].dur && !tl.done) pushFx(false);
+    requestTick();
   }
-  requestAnimationFrame(tick);
+  document.addEventListener('visibilitychange', requestTick);
 
   function markUI(){
     const s = steps[cur];
@@ -270,6 +276,7 @@
     /* the step's own animation starts once the camera has mostly arrived */
     tl.t0 = performance.now() + (far ? 300 : 900); tl.done = !nx.dur;
     lastFx = ''; pushFx(true);
+    requestTick();
     requestAnimationFrame(() => setLayout(nx.card));
     busy = true; setTimeout(() => { busy = false; }, opt.instant ? 0 : 820);
   }
@@ -348,7 +355,7 @@
     else {
       if (s.card) { const c = s.card; c.classList.remove('drag'); c.style.transition = 'transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s'; c.style.transform = ''; c.style.opacity = '';
         setTimeout(() => { c.style.transition = ''; }, 480); }
-      if (S && s.j >= 0) { cam.a = steps[cur].shot; cam.b = steps[s.j].shot; cam.from = cam.f; cam.to = 0; cam.t0 = performance.now(); cam.dur = 450; cam.run = true; }
+      if (S && s.j >= 0) { cam.a = steps[cur].shot; cam.b = steps[s.j].shot; cam.from = cam.f; cam.to = 0; cam.t0 = performance.now(); cam.dur = 450; cam.run = true; requestTick(); }
     }
   });
   addEventListener('touchcancel', () => { if (sw && sw.card) { sw.card.classList.remove('drag'); sw.card.style.transform = ''; sw.card.style.opacity = ''; } sw = null; tEl = null; });

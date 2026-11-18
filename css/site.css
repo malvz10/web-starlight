@@ -175,10 +175,12 @@ body.lay-bottom #shade{background:linear-gradient(to top,rgba(5,5,6,.94) 0%,rgba
 .lbl3.go i{left:-7px;top:-7px;width:14px;height:14px;background:#fff;box-shadow:0 0 0 3px rgba(5,5,6,.55),0 0 14px rgba(255,255,255,.7);pointer-events:auto;cursor:pointer}
 .lbl3.go i::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:1.5px solid rgba(255,255,255,.75);animation:lblPulse 2.4s var(--ease) infinite}
 @keyframes lblPulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.7);opacity:0}}
+.touch-3d .lbl3.go i::after{animation:none;inset:-3px;opacity:.42}
 .lbl3.go span,.lbl3.go.dn span{top:-17px;left:18px;display:inline-flex;align-items:center;gap:9px;padding:7px 14px 7px 7px;border:1px solid rgba(255,255,255,.2);border-left:1px solid rgba(255,255,255,.2);border-radius:999px;
   background:rgba(10,10,12,.78);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.45);
   font:620 13.5px/1 var(--sans);font-stretch:108%;color:#fff;pointer-events:auto;cursor:pointer;transition:background .25s,border-color .25s,transform .3s var(--ease)}
 .lbl3.go span::before{content:attr(data-n);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.12);font:400 9.5px/1 var(--wide);letter-spacing:.04em;color:#fff;transition:background .25s}
+.touch-3d .lbl3.go span,.touch-3d .lbl3.go.dn span{background:rgba(10,10,12,.96);-webkit-backdrop-filter:none;backdrop-filter:none}
 .lbl3.go.flip span{left:auto;right:18px;border-right:1px solid rgba(255,255,255,.2)}
 .lbl3.go.dot span{display:inline-flex}
 .lbl3.go:hover span,.lbl3.go.hot span{background:rgba(20,20,24,.92);border-color:rgba(255,255,255,.5);transform:translateY(-2px)}
